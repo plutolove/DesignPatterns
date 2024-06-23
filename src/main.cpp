@@ -1,59 +1,117 @@
+#include <any>
+#include <tuple>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "log.h"
 #include "sfinae.h"
+#include "type_traits.h"
 
-namespace design {
+template <typename... Ts>
+struct Const {
+  auto static constexpr Arr = []() {
+    std::array<int, sizeof...(Ts)> arr{};
+    auto func = [&arr](auto* ptr, size_t idx) {
+      using Type = std::decay_t<std::remove_pointer_t<decltype(ptr)>>;
+      if (std::is_same_v<Type, int>) {
+        arr[idx] = 0;
+      } else {
+        arr[idx] = 1;
+      }
+    };
+    size_t i = 0;
+    (func(static_cast<Ts*>(nullptr), i++), ...);
+    return arr;
+  }();
+};
 
-template <typename Lambda>
-class ValidHelper {
- private:
-  template <typename... Args>
-  constexpr auto test(int)
-      -> decltype(std::declval<Lambda>()(std::declval<Args>()...),
-                  std::true_type{}) {
-    return std::true_type{};
+template <typename T>
+struct InputImpl1 {
+  void getInput(const std::vector<std::any>& args, size_t idx) {
+    // input = std::any_cast<T>(args[idx]);
+    INFO("type name: {}", typeid(*this).name());
   }
+  T input;
+};
 
-  template <typename... Args>
-  constexpr auto test(...) -> std::false_type {
-    return std::false_type{};
+template <typename... Ts>
+struct ArgImpl : public InputImpl1<Ts>... {
+  template <size_t... I>
+  void InitInput(const std::vector<std::any>& args, std::index_sequence<I...>) {
+    ((InputImpl1<Ts>::getInput(args, I)), ...);
   }
-
- public:
-  template <typename... Args>
-  constexpr bool operator()(const Args&... args) {
-    return decltype(test<Args...>(0))::value;
+  void apply(const std::vector<std::any>& args) {
+    InitInput(args, std::make_index_sequence<sizeof...(Ts)>{});
   }
 };
 
-template <typename Lambda>
-constexpr auto valid(Lambda&& f) {
-  return ValidHelper<Lambda>{};
-}
+template <typename... Ts>
+struct Operator : public ArgImpl<Ts...> {
+  void Init(const std::vector<std::any>& args) { ArgImpl<Ts...>::apply(args); }
+};
 
-}  // namespace design
+using namespace pluto;
+
+template <typename T>
+struct MapF {
+  using type = std::vector<T>;
+};
+
+template <typename L, typename R>
+struct Common {
+  using type = std::common_type_t<L, R>;
+};
+
+template <typename L, typename R>
+struct Cmp {
+  constexpr static auto value = sizeof(L) < sizeof(R);
+};
+
+template <int ID>
+struct Node {
+  static constexpr auto id = ID;
+};
 
 int main(int argc, char** argv) {
-  auto ov = Overload{[](int i) { std::cout << "i=" << i << std::endl; },
-                     [](double d) { std::cout << "d=" << d << std::endl; }};
-  ov(23);
-  f(23);
-  INFO("{}", IsClass<Test>::value);
-  INFO("{}", IsClass<int>::value);
-  INFO("{}", HasMemberFunction<TestClass>::value);
-  auto is_assignable =
-      design::valid([](auto&& x, auto&& y) -> decltype(x + y) {});
-  // INFO("is assig: {}", is_assignable);
-  int a = 0;
+  // for (auto& val : Const<double, int, float, char>::Arr) {
+  //   INFO("val: {}", val);
+  // }
+  // Operator<int, double, std::vector<int>, float> tmp;
+  // tmp.Init(std::vector<std::any>{});
+  using st = TypeList<int, double, std::string>;
+  INFO("type size: {}", st::size);
+  printTypeName(st{});
+  using map_t = Map_t<st, MapF>;
+  printTypeName(map_t{});
+  using number_t = Filter_t<st, std::is_arithmetic>;
+  printTypeName(number_t{});
+  using SS = TypeList<int, double, char>;
+  using common_type = Fold_t<SS, Common, char>;
+  INFO("_______________________");
+  printTypeName<common_type>();
+  using cc = Concat_t<st, SS>;
+  printTypeName(cc{});
+  INFO("------------{}", TypeIn<cc, int>::value);
+  using ts = TypeList<int, int, double, double, std::string, float>;
+  using uniq = Unique_t<ts>;
+  printTypeName(uniq{});
+  using sort_t = Sort<cc, Cmp>::type;
+  INFO("---------------------------------------------");
+  printTypeName(sort_t{});
 
-  INFO("is_assig: {}", is_assignable(a, double{}));
-  INFO("is_assig: {}", is_assignable(a, std::string{}));
-
-  auto check_member_func =
-      design::valid([](auto&& x) -> decltype(x.func(double{})) {});
-  INFO("check member func: {}", check_member_func(a));
-  INFO("check TestClass member func: {} ", check_member_func(TestClass{}));
-
+  using g = Graph<auto (*)(Node<0>)->auto (*)(Node<1>)->auto (*)(Node<3>)->void,
+                  auto (*)(Node<1>)->auto (*)(Node<2>)->auto (*)(Node<3>)->void,
+                  auto (*)(Node<3>)->auto (*)(Node<1>)->void,
+                  auto (*)(Node<1>)->auto (*)(Node<4>)->void>::type;
+  printTypeName(g{});
+  using from = Filter_t<g, EdgeTrait<Node<0>>::IsFrom>;
+  printTypeName(from{});
+  using to = Map_t<from, EdgeTrait<>::GetTo>::type;
+  INFO("----------------------------------");
+  printTypeName(to{});
+  using path = FindShortestPath<g::type, Node<0>, Node<4>>::type;
+  INFO("--------------------------------");
+  printTypeName(path{});
   return 0;
 }

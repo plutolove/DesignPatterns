@@ -45,3 +45,33 @@ class TestClass {
  public:
   void func(double) {}
 };
+
+template <typename Lambda>
+class ValidHelper {
+ private:
+  template <typename... Args>
+  constexpr auto test(int)
+      -> decltype(std::declval<Lambda>()(std::declval<Args>()...),
+                  std::true_type{}) {
+    return std::true_type{};
+  }
+
+  template <typename... Args>
+  constexpr auto test(...) -> std::false_type {
+    return std::false_type{};
+  }
+
+ public:
+  template <typename... Args>
+  constexpr auto operator()(const Args&... args) {
+    return test<Args...>(0);
+  }
+};
+
+template <typename Lambda>
+constexpr auto valid(Lambda&& f) {
+  return ValidHelper<Lambda>{};
+}
+/*
+
+*/
