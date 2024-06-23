@@ -4,13 +4,14 @@ set_languages("c++17")
 
 add_rules("plugin.compile_commands.autoupdate", { outputdir = "build" })
 
+add_requires("boost 1.84.0")
 add_requires("spdlog v1.11.0")
 
 target("DesignPatterns")
     set_kind("binary")
     add_includedirs("./src") 
     add_files("src/*.cpp")
-    add_packages("spdlog")
+    add_packages("spdlog", "boost")
 
 --
 -- If you want to known more usage about xmake, please see https://xmake.io

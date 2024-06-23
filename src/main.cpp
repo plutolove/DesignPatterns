@@ -4,8 +4,10 @@
 #include <utility>
 #include <vector>
 
+#include "boost/preprocessor/stringize.hpp"
 #include "log.h"
 #include "sfinae.h"
+#include "type_name.h"
 #include "type_traits.h"
 
 template <typename... Ts>
@@ -73,6 +75,17 @@ struct Node {
   static constexpr auto id = ID;
 };
 
+template <typename T>
+struct TypeDeclar;
+
+#define DEC(type)                                                   \
+  template <>                                                       \
+  struct TypeDeclar<type> {                                         \
+    constexpr static auto var = typeName(BOOST_PP_STRINGIZE(type)); \
+  };
+
+DEC(std::string);
+
 int main(int argc, char** argv) {
   // for (auto& val : Const<double, int, float, char>::Arr) {
   //   INFO("val: {}", val);
@@ -113,5 +126,6 @@ int main(int argc, char** argv) {
   using path = FindShortestPath<g::type, Node<0>, Node<4>>::type;
   INFO("--------------------------------");
   printTypeName(path{});
+  INFO("{}", fmt::join(TypeDeclar<std::string>::var, ""));
   return 0;
 }
